@@ -1,0 +1,85 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Unbound Documentation",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#BBFA48",
+    "light": "#BBFA48",
+    "dark": "#1A1A1A",
+    "anchors": {
+      "from": "#BBFA48",
+      "to": "#7DD03A"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "App",
+      "url": "https://unbound.fi"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Launch App",
+    "url": "https://app.unbound.fi"
+  },
+  "tabs": [
+    {
+      "name": "Documentation",
+      "url": "/"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/unboundlabs/unbound"
+    },
+    {
+      "name": "Discord",
+      "icon": "discord",
+      "url": "https://discord.gg/unbound"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "01-overview"
+      ]
+    },
+    {
+      "group": "Core Concepts",
+      "pages": [
+        "02-how-it-works",
+        "03-architecture",
+        "04-erc-compatibility"
+      ]
+    },
+    {
+      "group": "Safety",
+      "pages": [
+        "05-risk-security"
+      ]
+    },
+    {
+      "group": "Developers",
+      "pages": [
+        "06-for-developers"
+      ]
+    },
+    {
+      "group": "Support",
+      "pages": [
+        "07-faq"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "twitter": "https://twitter.com/unboundfi",
+    "github": "https://github.com/unboundlabs/unbound",
+    "discord": "https://discord.gg/unbound"
+  }
+}
