@@ -15,15 +15,10 @@
             "to": "#7DD03A"
         }
     },
-    "topbarLinks": [
-        {
-            "name": "App",
-            "url": "https://unbound.fi"
-        }
-    ],
+    "topbarLinks": [],
     "topbarCtaButton": {
         "name": "Launch App",
-        "url": "https://app.unbound.fi"
+        "url": "https://app.unboundfi.xyz"
     },
     "tabs": [
         {
@@ -31,18 +26,7 @@
             "url": "/"
         }
     ],
-    "anchors": [
-        {
-            "name": "GitHub",
-            "icon": "github",
-            "url": "https://github.com/unboundlabs/unbound"
-        },
-        {
-            "name": "Discord",
-            "icon": "discord",
-            "url": "https://discord.gg/unbound"
-        }
-    ],
+    "anchors": [],
     "navigation": [
         {
             "group": "Getting Started",
@@ -78,8 +62,6 @@
         }
     ],
     "footerSocials": {
-        "twitter": "https://twitter.com/unboundfi",
-        "github": "https://github.com/unboundlabs/unbound",
-        "discord": "https://discord.gg/unbound"
+        "twitter": "https://x.com/unboundedapp"
     }
 }
