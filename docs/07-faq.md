@@ -192,9 +192,3 @@ Remember that shares represent proportional ownership. The value depends on:
 - Current BTC price
 
 Check `get_vault_position()` for current state.
-
-### How do I contact support?
-
-- Discord: [link]
-- Twitter: [@unboundfi](https://twitter.com/unboundfi)
-- GitHub: Issues on the repository
