@@ -54,14 +54,14 @@ fn get_user_position(user: ContractAddress) -> (u256, u256, u256)
 
 ## ERC-20: Token Standard
 
-The vault shares (XFRRR) are fully ERC-20 compliant:
+The vault shares (uBTC) are fully ERC-20 compliant:
 
 ### Token Details
 
 | Property | Value |
 |----------|-------|
 | Name | `Unbound wBTC Vault` |
-| Symbol | `XFRRR` |
+| Symbol | `uBTC` |
 | Decimals | `8` (matches wBTC) |
 
 ### Implemented Functions

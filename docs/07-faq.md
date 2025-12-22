@@ -17,9 +17,9 @@ When you deposit wBTC with 2x leverage:
 
 You now have 2x exposure to BTC price movements.
 
-### What are vault shares (XFRRR)?
+### What are vault shares (uBTC)?
 
-When you deposit, you receive vault shares (token symbol: XFRRR) representing your proportional ownership of the vault. When you withdraw, you burn shares to receive your portion of the vault's assets.
+When you deposit, you receive vault shares (token symbol: uBTC) representing your proportional ownership of the vault. When you withdraw, you burn shares to receive your portion of the vault's assets.
 
 ### Is Unbound custodial?
 
@@ -158,13 +158,13 @@ Your funds are in Vesu, not Unbound. You can always:
 
 Wrapped Bitcoin—an ERC-20 token backed 1:1 by BTC. Address: `0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac`
 
-### What are XFRRR tokens?
+### What are uBTC tokens?
 
 Vault shares representing your position. 8 decimals (same as wBTC).
 
 ### Can I transfer vault shares?
 
-Yes, XFRRR is a standard ERC-20 token. You can transfer, hold in any wallet, or potentially use in other DeFi protocols.
+Yes, uBTC is a standard ERC-20 token. You can transfer, hold in any wallet, or potentially use in other DeFi protocols.
 
 ---
 
@@ -181,7 +181,7 @@ Yes, XFRRR is a standard ERC-20 token. You can transfer, hold in any wallet, or 
 
 Add the token manually:
 - Contract: `0x03ca2746d882bfc63213dc264af5e0856e91c393f07c966607cc1492cec55aa9`
-- Symbol: XFRRR
+- Symbol: uBTC
 - Decimals: 8
 
 ### My position value seems wrong.

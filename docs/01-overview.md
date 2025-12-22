@@ -83,5 +83,3 @@ When you open a leveraged position:
 - ❌ Guarantee profits
 - ❌ Protect against liquidation
 - ❌ Provide insurance
-
-See [Risk & Security](./05-risk-security.md) for more details on risks.
