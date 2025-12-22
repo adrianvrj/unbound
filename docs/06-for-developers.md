@@ -273,12 +273,3 @@ snforge test
 # Fork mainnet for testing
 snforge test --fork-url https://starknet-mainnet.g.alchemy.com/...
 ```
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch
-3. Write tests
-4. Submit PR
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for details.
