@@ -4,30 +4,22 @@
 
 Unbound consists of two main smart contracts that work together to provide leveraged vault functionality:
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         UNBOUND SYSTEM                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   ┌───────────────┐          ┌───────────────────────────┐     │
-│   │    Vault      │─────────→│       Executor            │     │
-│   │  (ERC-4626)   │          │  (Flash Loan Receiver)    │     │
-│   └───────────────┘          └───────────────────────────┘     │
-│         │                              │                        │
-│         │                              │                        │
-│         ▼                              ▼                        │
-│   ┌─────────────────────────────────────────────────┐          │
-│   │                   VESU V2 POOL                   │          │
-│   │  • Flash Loans  • Positions  • Collateral/Debt  │          │
-│   └─────────────────────────────────────────────────┘          │
-│                              │                                  │
-│                              ▼                                  │
-│   ┌─────────────────────────────────────────────────┐          │
-│   │                   AVNU ROUTER                    │          │
-│   │              • DEX Aggregator                    │          │
-│   └─────────────────────────────────────────────────┘          │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Unbound["UNBOUND SYSTEM"]
+        Vault["🏦 Vault<br/>(ERC-4626)"]
+        Executor["⚡ Executor<br/>(Flash Loan Receiver)"]
+    end
+    
+    subgraph External["EXTERNAL PROTOCOLS"]
+        Vesu["🏛️ Vesu V2 Pool<br/>Flash Loans • Positions • Collateral/Debt"]
+        AVNU["🔄 AVNU Router<br/>DEX Aggregator"]
+    end
+    
+    Vault --> Executor
+    Vault --> Vesu
+    Executor --> Vesu
+    Executor --> AVNU
 ```
 
 ## Contract Details
@@ -113,30 +105,32 @@ fn on_flash_loan(
 
 ### Position Creation
 
-```
-1. User → Vault: deposit_and_leverage(wBTC, flashAmount, ...)
-2. User → Vault: wBTC transfer
-3. Vault → Vesu: flash_loan(USDC)
-4. Vesu → Executor: on_flash_loan(USDC)
-5. Executor → AVNU: swap(USDC → wBTC)
-6. Executor → Vesu: modify_position(deposit wBTC)
-7. Executor → Vesu: modify_position(borrow USDC)
-8. Executor → Vesu: repay flash loan
-9. Vault → User: mint shares
+```mermaid
+flowchart LR
+    A[User] -->|1. deposit_and_leverage| B[Vault]
+    A -->|2. wBTC transfer| B
+    B -->|3. flash_loan| C[Vesu]
+    C -->|4. on_flash_loan| D[Executor]
+    D -->|5. swap USDC→wBTC| E[AVNU]
+    D -->|6. deposit collateral| C
+    D -->|7. borrow USDC| C
+    D -->|8. repay flash| C
+    B -->|9. mint shares| A
 ```
 
 ### Position Closure
 
-```
-1. User → Vault: withdraw_all(...)
-2. Vault: burn shares
-3. Vault → Vesu: flash_loan(USDC)
-4. Vesu → Executor: on_flash_loan(USDC)
-5. Executor → Vesu: modify_position(repay debt)
-6. Executor → Vesu: modify_position(withdraw wBTC)
-7. Executor → AVNU: swap(wBTC → USDC) [partial]
-8. Executor → Vesu: repay flash loan
-9. Vault → User: transfer remaining wBTC
+```mermaid
+flowchart LR
+    A[User] -->|1. withdraw_all| B[Vault]
+    B -->|2. burn shares| B
+    B -->|3. flash_loan| C[Vesu]
+    C -->|4. on_flash_loan| D[Executor]
+    D -->|5. repay debt| C
+    D -->|6. withdraw wBTC| C
+    D -->|7. swap wBTC→USDC| E[AVNU]
+    D -->|8. repay flash| C
+    B -->|9. transfer wBTC| A
 ```
 
 ## Trust Model

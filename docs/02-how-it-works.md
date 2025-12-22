@@ -40,35 +40,24 @@ After the flash loan completes, the Vault:
 
 ### Deposit Flow Diagram
 
-```
-┌─────────┐    ┌─────────┐    ┌──────────┐    ┌─────────┐
-│  User   │    │  Vault  │    │ Executor │    │  Vesu   │
-└────┬────┘    └────┬────┘    └────┬─────┘    └────┬────┘
-     │              │              │               │
-     │  deposit     │              │               │
-     │──────────────>              │               │
-     │              │              │               │
-     │              │  flash_loan  │               │
-     │              │──────────────────────────────>
-     │              │              │               │
-     │              │              │  on_flash_loan│
-     │              │              │<──────────────│
-     │              │              │               │
-     │              │              │  swap USDC    │
-     │              │              │───────────────>  AVNU
-     │              │              │               │
-     │              │              │  deposit wBTC │
-     │              │              │───────────────>
-     │              │              │               │
-     │              │              │  borrow USDC  │
-     │              │              │───────────────>
-     │              │              │               │
-     │              │              │  repay flash  │
-     │              │              │───────────────>
-     │              │              │               │
-     │  mint shares │              │               │
-     │<──────────────              │               │
-     │              │              │               │
+```mermaid
+sequenceDiagram
+    participant User
+    participant Vault
+    participant Executor
+    participant Vesu
+    participant AVNU
+
+    User->>Vault: deposit_and_leverage(wBTC, flashAmount)
+    User->>Vault: Transfer wBTC
+    Vault->>Vesu: flash_loan(USDC)
+    Vesu->>Executor: on_flash_loan(USDC)
+    Executor->>AVNU: swap(USDC → wBTC)
+    AVNU-->>Executor: wBTC
+    Executor->>Vesu: deposit wBTC (collateral)
+    Executor->>Vesu: borrow USDC
+    Executor->>Vesu: repay flash loan
+    Vault-->>User: mint shares (uBTC)
 ```
 
 ## Withdrawal Flow
@@ -100,36 +89,24 @@ Inside the callback:
 
 ### Withdrawal Flow Diagram
 
-```
-┌─────────┐    ┌─────────┐    ┌──────────┐    ┌─────────┐
-│  User   │    │  Vault  │    │ Executor │    │  Vesu   │
-└────┬────┘    └────┬────┘    └────┬─────┘    └────┬────┘
-     │              │              │               │
-     │ withdraw_all │              │               │
-     │──────────────>              │               │
-     │              │              │               │
-     │              │  flash_loan  │               │
-     │              │──────────────────────────────>
-     │              │              │               │
-     │              │              │  on_flash_loan│
-     │              │              │<──────────────│
-     │              │              │               │
-     │              │              │  repay debt   │
-     │              │              │───────────────>
-     │              │              │               │
-     │              │              │  withdraw col │
-     │              │              │───────────────>
-     │              │              │               │
-     │              │              │  swap wBTC    │
-     │              │              │───────────────>  AVNU
-     │              │              │               │
-     │              │              │  repay flash  │
-     │              │              │───────────────>
-     │              │              │               │
-     │  transfer    │              │               │
-     │  wBTC        │              │               │
-     │<──────────────              │               │
-     │              │              │               │
+```mermaid
+sequenceDiagram
+    participant User
+    participant Vault
+    participant Executor
+    participant Vesu
+    participant AVNU
+
+    User->>Vault: withdraw_all()
+    Vault->>Vault: burn shares
+    Vault->>Vesu: flash_loan(USDC)
+    Vesu->>Executor: on_flash_loan(USDC)
+    Executor->>Vesu: repay debt
+    Executor->>Vesu: withdraw collateral (wBTC)
+    Executor->>AVNU: swap(wBTC → USDC)
+    AVNU-->>Executor: USDC
+    Executor->>Vesu: repay flash loan
+    Vault-->>User: transfer remaining wBTC
 ```
 
 ## Position State
@@ -140,7 +117,7 @@ After a successful deposit, the vault has:
 |-----------|----------|
 | Collateral (wBTC) | Vesu Pool (as collateral in position) |
 | Debt (USDC) | Vesu Pool (borrowed amount) |
-| Shares (XFRRR) | User's wallet |
+| Shares (uBTC) | User's wallet |
 
 The Vault itself holds no assets—everything is in Vesu.
 
