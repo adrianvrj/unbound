@@ -36,7 +36,7 @@ Inside the flash loan callback, Executor performs:
 
 After the flash loan completes, the Vault:
 1. Calculates shares based on deposited assets
-2. Mints vault shares (XFRRR) to the user
+2. Mints vault shares (uBTC) to the user
 
 ### Deposit Flow Diagram
 
