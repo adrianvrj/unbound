@@ -15,10 +15,10 @@ Manually achieving leverage on lending protocols requires:
 5. Repeat until desired leverage is reached
 
 This process is:
-- **Time-consuming**: Multiple transactions required
-- **Gas-intensive**: Each step costs transaction fees
-- **Error-prone**: Easy to make mistakes during looping
-- **Capital-inefficient**: Requires waiting between transactions
+- **Time-consuming**: Multiple transactions required.
+- **Gas-intensive**: Each step costs transaction fees.
+- **Error-prone**: Easy to make mistakes during looping.
+- **Capital-inefficient**: Requires waiting between transactions.
 
 ## The Unbound Solution
 
