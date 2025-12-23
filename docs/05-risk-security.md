@@ -1,194 +1,108 @@
 # Risk & Security
 
-This document outlines the risks associated with using Unbound and the security measures in place.
+This document outlines the risks and security considerations of using Unbound.
 
-## ⚠️ Risk Warning
+## Risk Categories
 
-**Leveraged positions are high-risk.** You can lose more than your initial deposit. Only use funds you can afford to lose.
+### 1. Strategy Risk
 
-## Position Risks
+**Negative Funding Periods**
+- Risk: Funding rates can turn negative, meaning shorts pay longs
+- Mitigation: Strategy closes positions when funding < threshold
+- Impact: Reduced yield during negative funding periods
 
-### 1. Liquidation Risk
+**Low Funding Periods**
+- Risk: Funding rates near zero generate minimal yield
+- Impact: Lower than expected returns
 
-If the value of your collateral falls below the required threshold, your position will be liquidated.
+### 2. Exchange Risk
 
-**How liquidation works:**
-1. Collateral value drops relative to debt
-2. Health Factor falls below 1.0
-3. Liquidators repay debt and claim collateral + bonus
-4. You lose your position
+**Extended Exchange Custody**
+- Risk: USDC is held on Extended exchange
+- Impact: If Extended is hacked/insolvent, funds could be lost
+- Mitigation: Extended uses Starknet validity proofs
 
-**Liquidation Parameters:**
-
-| Parameter | Value |
-|-----------|-------|
-| Max LTV | 86% |
-| Liquidation Factor | 90% |
-| Liquidation Bonus | ~10% |
-
-### Health Factor
-
-```
-Health Factor = (Collateral Value × Liquidation Factor) / Debt Value
-```
-
-| Health Factor | Risk Level | Action |
-|---------------|------------|--------|
-| > 2.0 | Safe | ✅ Position is healthy |
-| 1.5 - 2.0 | Moderate | ⚠️ Monitor closely |
-| 1.2 - 1.5 | High | 🔴 Consider reducing leverage |
-| < 1.2 | Critical | 🚨 Liquidation imminent |
-| < 1.0 | Liquidated | ❌ Position can be liquidated |
-
-### Liquidation Price
-
-```
-Liquidation Price = Debt / (Collateral × Liquidation Factor)
-```
-
-**Example with 2x leverage:**
-- Deposit: 1 wBTC @ $100,000
-- Total Collateral: 2 wBTC
-- Debt: $100,000 USDC
-- Liquidation Price: $100,000 / (2 × 0.9) = **$55,555**
-
-BTC would need to fall ~44% for liquidation.
-
-### 2. Interest Rate Risk
-
-Borrowing USDC incurs interest that accrues over time:
-
-- **Base Borrow APR**: ~1.8% (variable)
-- **BTCFi Rewards**: ~1.4% (reduces net cost)
-- **Net Borrowing Cost**: ~0.4%
-
-Interest rates can change based on:
-- Pool utilization
-- Market conditions
-- Protocol governance
+**Exchange Downtime**
+- Risk: Extended API/exchange unavailable
+- Impact: Unable to execute strategy or withdraw
+- Mitigation: Backend retries and manual fallbacks
 
 ### 3. Smart Contract Risk
 
-Unbound relies on multiple smart contracts:
+**Vault Contract Bugs**
+- Risk: Bugs in vault contract could lock funds
+- Mitigation: Simple contract design, open source
 
-| Contract | Risk |
-|----------|------|
-| Unbound Vault | Core logic bugs |
-| Unbound Executor | Flash loan handling errors |
-| Vesu Pool | Lending protocol vulnerabilities |
-| AVNU Router | Swap execution failures |
+**Swap Slippage**
+- Risk: Poor swap rates during wBTC ↔ USDC conversion
+- Mitigation: Slippage protection in contract + AVNU best routing
 
-### 4. Oracle Risk
+### 4. Operator Risk
 
-Vesu uses oracles for price feeds. Oracle failures could cause:
-- Incorrect liquidation triggers
-- Wrong collateral valuations
-- Trading halts
+**Backend Downtime**
+- Risk: Backend service goes offline
+- Impact: Strategy stops executing, no new deposits processed
+- Mitigation: Funds remain safe in Extended, can be manually recovered
 
-### 5. Liquidity Risk
+**Operator Key Compromise**
+- Risk: Operator private key stolen
+- Impact: Attacker could withdraw from Extended to operator wallet
+- Mitigation: Key stored securely, monitoring for unusual activity
 
-During high volatility:
-- DEX liquidity may dry up
-- Swap slippage increases
-- Withdrawals may receive less than expected
+## Position Risks
+
+### Unrealized PnL
+
+Short positions have unrealized PnL:
+- If BTC price rises: Unrealized loss on short
+- If BTC price falls: Unrealized gain on short
+
+**Example:**
+| BTC Price Move | Short PnL | Funding Received | Net |
+|----------------|-----------|------------------|-----|
+| +5% | -$500 | +$100 (week) | -$400 |
+| -5% | +$500 | +$100 (week) | +$600 |
+
+The strategy is delta-neutral over time as funding payments offset price movements.
+
+### Liquidation Risk
+
+With 2x leverage:
+- Liquidation at ~50% move against position
+- Example: If BTC rises 50%+ rapidly, position could be liquidated
+
+**Mitigation:**
+- Conservative leverage (2x default)
+- Positions closed when funding is unfavorable
 
 ## Security Measures
 
-### Smart Contract Security
+| Measure | Implementation |
+|---------|----------------|
+| Key Security | Operator key stored in environment variables |
+| API Authentication | Extended API key with limited permissions |
+| Transaction Signing | Stark signatures via x10 SDK |
+| Access Control | Vault has Ownable pattern |
 
-| Measure | Status |
-|---------|--------|
-| Access Controls | ✅ Owner-only admin functions |
-| Reentrancy Protection | ✅ Checks-effects-interactions |
-| Flash Loan Validation | ✅ Only Vesu can call callback |
-| Delegation Required | ✅ Executor needs vault delegation |
-| Pause Functionality | ✅ Emergency pause available |
-
-### Access Control
-
-```cairo
-// Only owner can:
-fn set_performance_fee(...)  // Change fee (max 5%)
-fn pause() / fn unpause()     // Emergency controls
-fn set_treasury(...)          // Change fee recipient
-```
-
-### Flash Loan Security
-
-```cairo
-fn on_flash_loan(...) {
-    // Only Vesu can call this
-    assert(get_caller_address() == self.vesu_pool.read(), "only-vesu");
-    
-    // Only vault can trigger operations
-    assert(sender == self.vault.read(), "only-vault");
-}
-```
-
-### Slippage Protection
-
-All swaps include `min_out` parameters:
-- `min_collateral_out` for deposits
-- `min_underlying_out` for withdrawals
-
-If slippage exceeds tolerance, transaction reverts.
-
-## Fees
-
-### Performance Fee
-
-- **Rate**: 1.5% (configurable, max 5%)
-- **Applied to**: Profits only
-- **Collected**: On withdrawal
-
-```
-fee = (withdrawal_value - deposit_value) × fee_rate
-```
-
-### Network Fees
-
-Standard Starknet gas fees apply for:
-- Deposit transactions
-- Withdrawal transactions
-- (Flash loans on Vesu are fee-free)
-
-## Mitigation Strategies
-
-### For Users
+## Best Practices for Users
 
 1. **Start Small**: Test with small amounts first
-2. **Monitor Position**: Check health factor regularly
-3. **Lower Leverage**: Use 2x instead of 4x for safety
-4. **Set Alerts**: Use monitoring tools for price alerts
-5. **Diversify**: Don't put all funds in one position
-
-### For Protocol
-
-1. **Audits**: Smart contract audits (in progress)
-2. **Bug Bounty**: Immunefi program (planned)
-3. **Gradual Rollout**: TVL caps during launch
-4. **Monitoring**: On-chain monitoring for anomalies
+2. **Understand the Strategy**: Know that yield comes from funding rates
+3. **Monitor**: Check your position regularly
+4. **Diversify**: Don't put all funds in one vault
 
 ## Emergency Procedures
 
-### If Position is Near Liquidation
+### If Backend Goes Down
+- Funds remain in Extended
+- Owner can manually withdraw using operator wallet
+- Users can request admin assistance
 
-1. Add more collateral (deposit more wBTC)
-2. Or partially close position to reduce debt
-3. Or fully withdraw before liquidation
+### If Extended Has Issues
+- Monitor Extended status
+- Funds can be withdrawn when service resumes
 
-### If Protocol is Paused
-
-- Withdrawals remain enabled
-- New deposits are blocked
-- Wait for unpause or governance action
-
-### If Vesu is Compromised
-
-- Unbound cannot protect against Vesu vulnerabilities
-- Monitor Vesu announcements
-- Consider withdrawing if concerns arise
-
-## Disclaimer
-
-This documentation is for informational purposes only. It does not constitute financial advice. Users are responsible for their own decisions and should conduct their own research. The Unbound team is not liable for losses incurred through use of the protocol.
+### Full Recovery
+1. Withdraw all funds from Extended manually
+2. Send USDC to vault contract
+3. Users withdraw their share via contract

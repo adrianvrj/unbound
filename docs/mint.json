@@ -1,6 +1,6 @@
 {
     "$schema": "https://mintlify.com/schema.json",
-    "name": "Unbound Documentation",
+    "name": "Unbound - BTC Funding Rate Vault",
     "logo": {
         "dark": "/logo.png",
         "light": "/logo.png"
@@ -38,8 +38,7 @@
             "group": "Core Concepts",
             "pages": [
                 "02-how-it-works",
-                "03-architecture",
-                "04-erc-compatibility"
+                "03-architecture"
             ]
         },
         {

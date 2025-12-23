@@ -1,153 +1,120 @@
 # Architecture
 
-## Overview
+This document describes the technical architecture of Unbound.
 
-Unbound consists of two main smart contracts that work together to provide leveraged vault functionality:
+## System Overview
 
-```mermaid
-graph TB
-    subgraph Unbound["UNBOUND SYSTEM"]
-        Vault["🏦 Vault<br/>(ERC-4626)"]
-        Executor["⚡ Executor<br/>(Flash Loan Receiver)"]
-    end
-    
-    subgraph External["EXTERNAL PROTOCOLS"]
-        Vesu["🏛️ Vesu V2 Pool<br/>Flash Loans • Positions • Collateral/Debt"]
-        AVNU["🔄 AVNU Router<br/>DEX Aggregator"]
-    end
-    
-    Vault --> Executor
-    Vault --> Vesu
-    Executor --> Vesu
-    Executor --> AVNU
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         UNBOUND SYSTEM                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌──────────────┐      ┌──────────────┐      ┌──────────────┐ │
+│   │   Frontend   │      │   Backend    │      │    Vault     │ │
+│   │   (Next.js)  │─────▶│   (FastAPI)  │◀────▶│  (Cairo)     │ │
+│   └──────────────┘      └──────────────┘      └──────────────┘ │
+│         │                      │                      │         │
+│         │                      │                      │         │
+│         ▼                      ▼                      ▼         │
+│   ┌──────────────┐      ┌──────────────┐      ┌──────────────┐ │
+│   │   Starknet   │      │   Extended   │      │    AVNU      │ │
+│   │   Wallet     │      │   Exchange   │      │   Router     │ │
+│   └──────────────┘      └──────────────┘      └──────────────┘ │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Contract Details
+## Smart Contracts
 
-### UnboundVault
+### Vault Contract (`vault.cairo`)
 
-**Purpose**: User-facing contract for deposits and withdrawals. Implements ERC-4626 tokenized vault standard.
+The vault is an ERC-4626 tokenized vault that:
+- Accepts wBTC deposits
+- Swaps to USDC via AVNU
+- Mints shares proportional to deposit
+- Handles withdrawals with USDC → wBTC swap
 
-**Key Responsibilities**:
-- Accept user deposits
-- Mint/burn vault shares
-- Track user positions
-- Coordinate with Executor for leverage operations
-- Collect performance fees
-
-**Storage**:
+**Key Functions:**
 ```cairo
-struct Storage {
-    underlying_asset: ContractAddress,  // wBTC
-    debt_asset: ContractAddress,        // USDC
-    vesu_pool: ContractAddress,
-    executor: ContractAddress,
-    paused: bool,
-    performance_fee_bps: u256,
-    treasury: ContractAddress,
-}
+fn deposit(amount: u256, avnu_calldata: Array<felt252>) -> u256
+fn withdraw(shares: u256, receiver: ContractAddress, owner: ContractAddress, avnu_calldata: Array<felt252>) -> u256
+fn total_assets() -> u256
+fn balance_of(owner: ContractAddress) -> u256
 ```
 
-### FlashLoanExecutor
+## Backend System
 
-**Purpose**: Handles the flash loan callback and executes the leverage/deleverage operations.
+### FastAPI Server (`api.py`)
 
-**Key Responsibilities**:
-- Receive flash loans from Vesu
-- Execute swaps via AVNU
-- Manage Vesu position (deposit collateral, borrow debt)
-- Ensure atomicity of operations
+REST API for vault operations:
 
-**Security**: Only the Vesu Pool can call `on_flash_loan`.
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/vault/status` | GET | Vault stats and APY |
+| `/api/strategy/status` | GET | Strategy state |
+| `/api/strategy/execute` | POST | Run strategy iteration |
+| `/api/withdrawal/request` | POST | Request withdrawal |
+| `/api/wallet/status` | GET | Operator wallet balance |
 
-```cairo
-fn on_flash_loan(
-    sender: ContractAddress,  // Must be Vault
-    asset: ContractAddress,   // USDC
-    amount: u256,
-    data: Span<felt252>       // Operation details
-)
-```
+### Strategy Engine (`strategy.py`)
+
+Implements funding rate arbitrage:
+- Monitors funding rate from Extended API
+- Opens SHORT when funding > threshold
+- Closes position when funding < threshold
+- Auto-executes after deposits
+
+### Starknet Client (`starknet_client.py`)
+
+Handles on-chain operations:
+- Monitors operator wallet for USDC
+- Deposits USDC to Extended
+- Forwards USDC to vault for withdrawals
+
+### Extended Client (`extended_client.py`)
+
+Interacts with Extended exchange:
+- Gets market data and funding rates
+- Places orders using x10 SDK
+- Manages positions and withdrawals
 
 ## External Integrations
 
-### Vesu V2
+### Extended Exchange
 
-[Vesu](https://vesu.xyz) is Starknet's lending protocol used for:
+Perpetual futures exchange on Starknet:
+- Deposit contract: `0x062da0780fae50d68cecaa5a051606dc21217ba290969b302db4dd99d2e9b470`
+- Trading via REST API + Stark signatures
+- Funding payments every hour
 
-| Function | Usage |
-|----------|-------|
-| `flash_loan` | Get USDC without collateral |
-| `modify_position` | Add collateral / borrow debt |
-| `position` | Query current position state |
-| `price` | Get asset oracle prices |
+### AVNU Router
 
-**Pool Parameters** (wBTC/USDC pair):
-- Max LTV: 86%
-- Liquidation Factor: 90%
-- Borrow APR: Variable (~1.8%)
-- BTCFi Rewards: ~1.4% (reduces net cost)
-
-### AVNU
-
-[AVNU](https://avnu.fi) is a DEX aggregator for optimal swap execution:
-
-| Function | Usage |
-|----------|-------|
-| `multi_route_swap` | Execute USDC ↔ wBTC swaps |
-
-**Why AVNU?**
-- Best execution across multiple DEXs
-- Single transaction for complex routes
-- Built-in slippage protection
+DEX aggregator for best swap rates:
+- Address: `0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f`
+- Used for wBTC ↔ USDC swaps
 
 ## Data Flow
 
-### Position Creation
-
-```mermaid
-flowchart LR
-    A[User] -->|1. deposit_and_leverage| B[Vault]
-    A -->|2. wBTC transfer| B
-    B -->|3. flash_loan| C[Vesu]
-    C -->|4. on_flash_loan| D[Executor]
-    D -->|5. swap USDC→wBTC| E[AVNU]
-    D -->|6. deposit collateral| C
-    D -->|7. borrow USDC| C
-    D -->|8. repay flash| C
-    B -->|9. mint shares| A
+### Deposit
+```
+User wBTC → Vault → AVNU → USDC → Operator → Extended → SHORT position
 ```
 
-### Position Closure
-
-```mermaid
-flowchart LR
-    A[User] -->|1. withdraw_all| B[Vault]
-    B -->|2. burn shares| B
-    B -->|3. flash_loan| C[Vesu]
-    C -->|4. on_flash_loan| D[Executor]
-    D -->|5. repay debt| C
-    D -->|6. withdraw wBTC| C
-    D -->|7. swap wBTC→USDC| E[AVNU]
-    D -->|8. repay flash| C
-    B -->|9. transfer wBTC| A
+### Yield Generation
+```
+Extended → Funding payments every hour → Equity grows
 ```
 
-## Trust Model
+### Withdrawal
+```
+Extended → USDC → Operator → Vault → AVNU → wBTC → User
+```
 
-| Entity | Trust Level | Why |
-|--------|-------------|-----|
-| Vault Owner | High | Can pause, set fees |
-| Executor | Medium | Only vault can trigger operations |
-| Vesu | Critical | Holds all collateral and debt |
-| AVNU | Medium | Swap execution only |
-| User | None needed | Permission-less interaction |
+## Security Model
 
-## Upgrade Path
-
-Current contracts are **not upgradeable**. To upgrade:
-1. Deploy new vault with updated logic
-2. Users withdraw from old vault
-3. Users deposit to new vault
-
-This ensures users always have full control over their assets.
+| Component | Trust Assumption |
+|-----------|------------------|
+| Vault Contract | Trustless (on-chain) |
+| Backend | Trust operator to run strategy honestly |
+| Extended | Trust exchange custody |
+| Operator Wallet | Controlled by backend |

@@ -1,275 +1,183 @@
 # For Developers
 
-This guide covers how to integrate with or build on top of Unbound.
+This guide covers integration with Unbound for developers.
 
 ## Contract Addresses (Mainnet)
 
-```typescript
-const CONTRACTS = {
-    VAULT: "0x03ca2746d882bfc63213dc264af5e0856e91c393f07c966607cc1492cec55aa9",
-    EXECUTOR: "0x0208e65dcda65cf743a42132fa5c7587a67a49cf990155ab3646d13939ee8848",
-    
-    // External
-    VESU_POOL: "0x0451fe483d5921a2919ddd81d0de6696669bccdacd859f72a4fba7656b97c3b5",
-    AVNU_ROUTER: "0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f",
-    
-    // Tokens
-    WBTC: "0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac",
-    USDC: "0x033068f6539f8e6e6b131e6b2b814e6c34a5224bc66947c47dab9dfee93b35fb",
-};
+| Contract | Address |
+|----------|---------|
+| Vault | `0x066db06cfe7d18c11f6ed5bf93dfb0db7e4ff40d8f5a41e9f7e2d01ebb7e16b8` |
+| Operator Wallet | `0x0244f12432e01EC3BE1F4c1E0fbC3e7db90a3EF06105F3568Daab5f1Fdb8ff07` |
+
+## Token Addresses
+
+| Token | Address |
+|-------|---------|
+| wBTC | `0x03fe2b97c1fd336e750087d68b9b867997fd64a2661ff3ca5a7c771641e8e7ac` |
+| USDC | `0x053c91253bc9682c04929ca02ed00b3e423f6710d2ee7e0d5ebb06f3ecf368a8` |
+
+## Backend API
+
+Base URL: `http://localhost:8001` (development)
+
+### Strategy Endpoints
+
+```bash
+# Get strategy status
+GET /api/strategy/status
+
+# Execute strategy manually
+POST /api/strategy/execute
+
+# Open short position
+POST /api/strategy/open-short?size_usd=100
+
+# Close position
+POST /api/strategy/close
+
+# Start auto-execution loop
+POST /api/strategy/start
+
+# Stop auto-execution
+POST /api/strategy/stop
 ```
 
-## ABIs
+### Withdrawal Endpoints
 
-### Vault ABI (Key Functions)
+```bash
+# Get withdrawal status
+GET /api/withdrawal/status
 
-```json
-[
-    {
-        "name": "deposit_and_leverage",
-        "type": "function",
-        "inputs": [
-            {"name": "assets", "type": "u256"},
-            {"name": "flash_loan_amount", "type": "u256"},
-            {"name": "min_collateral_out", "type": "u256"},
-            {"name": "avnu_calldata", "type": "Array<felt252>"}
-        ],
-        "outputs": [{"type": "u256"}],
-        "state_mutability": "external"
-    },
-    {
-        "name": "withdraw_all",
-        "type": "function",
-        "inputs": [
-            {"name": "min_underlying_out", "type": "u256"},
-            {"name": "avnu_calldata", "type": "Array<felt252>"}
-        ],
-        "outputs": [{"type": "u256"}],
-        "state_mutability": "external"
-    },
-    {
-        "name": "get_vault_position",
-        "type": "function",
-        "inputs": [],
-        "outputs": [{"type": "(u256, u256)"}],
-        "state_mutability": "view"
-    },
-    {
-        "name": "total_assets",
-        "type": "function",
-        "inputs": [],
-        "outputs": [{"type": "u256"}],
-        "state_mutability": "view"
-    }
-]
+# Request withdrawal from Extended
+POST /api/withdrawal/request?amount=100
+
+# Prepare vault withdrawal (closes positions)
+POST /api/withdrawal/prepare-vault?shares=1000
+
+# Forward USDC to vault
+POST /api/withdrawal/forward-to-vault
 ```
 
-## Integration Guide
+### Wallet Endpoints
 
-### 1. Prerequisites
+```bash
+# Get operator wallet status
+GET /api/wallet/status
 
-- Node.js 18+
-- starknet.js v6+
-- Access to Starknet RPC
+# Start deposit monitor
+POST /api/wallet/start-monitor
 
-### 2. Reading Vault State
-
-```typescript
-import { Contract, RpcProvider } from 'starknet';
-import { VAULT_ABI, CONTRACTS } from './contracts';
-
-const provider = new RpcProvider({ nodeUrl: 'YOUR_RPC_URL' });
-const vault = new Contract(VAULT_ABI, CONTRACTS.VAULT, provider);
-
-// Get total assets in vault
-const totalAssets = await vault.total_assets();
-console.log('Total Assets:', totalAssets.toString());
-
-// Get vault position (collateral, debt)
-const [collateral, debt] = await vault.get_vault_position();
-console.log('Collateral:', collateral.toString());
-console.log('Debt:', debt.toString());
-
-// Calculate leverage ratio
-const leverage = Number(collateral) / (Number(collateral) - Number(debt) * 1e2);
+# Deposit to Extended manually
+POST /api/wallet/deposit-to-extended?amount=100
 ```
 
-### 3. Opening a Position
+## Smart Contract ABI
 
-```typescript
-import { Account, CallData, cairo } from 'starknet';
-
-// Step 1: Get AVNU quote for swap
-const avnuQuote = await fetch('https://starknet.api.avnu.fi/swap/v2/quotes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-        sellTokenAddress: CONTRACTS.USDC,
-        buyTokenAddress: CONTRACTS.WBTC,
-        sellAmount: flashLoanAmount.toString(),
-        takerAddress: CONTRACTS.EXECUTOR,
-    })
-});
-
-// Step 2: Build swap calldata
-const swapCalldata = await fetch('https://starknet.api.avnu.fi/swap/v2/build', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-        quoteId: avnuQuote.quoteId,
-        takerAddress: CONTRACTS.EXECUTOR,
-        slippage: 0.01,
-    })
-});
-
-// Step 3: Build transaction
-const depositAmount = BigInt(0.001 * 1e8); // 0.001 wBTC
-const flashAmount = BigInt(100 * 1e6);      // $100 USDC
-
-const calls = [
-    // Approve wBTC to vault
-    {
-        contractAddress: CONTRACTS.WBTC,
-        entrypoint: 'approve',
-        calldata: CallData.compile([
-            CONTRACTS.VAULT,
-            cairo.uint256(depositAmount)
-        ])
-    },
-    // Deposit with leverage
-    {
-        contractAddress: CONTRACTS.VAULT,
-        entrypoint: 'deposit_and_leverage',
-        calldata: [
-            ...cairo.uint256(depositAmount),
-            ...cairo.uint256(flashAmount),
-            ...cairo.uint256(0),  // min_collateral_out
-            swapCalldata.calls[0].calldata.length.toString(16),
-            ...swapCalldata.calls[0].calldata
-        ]
-    }
-];
-
-const tx = await account.execute(calls);
-```
-
-### 4. Querying User Position
-
-```typescript
-// Get user's share balance
-const shares = await vault.balance_of(userAddress);
-
-// Get user's position details
-const [deposits, collateral, debt] = await vault.get_user_position(userAddress);
-
-// Calculate user's equity
-const totalAssets = await vault.total_assets();
-const totalSupply = await vault.total_supply();
-const userEquity = (shares * totalAssets) / totalSupply;
-```
-
-## API Integration
-
-### Vesu Pool API
-
-Get real-time pool statistics:
-
-```typescript
-const POOL_ID = "0x03976cac265a12609934089004df458ea29c776d77da423c96dc761d09d24124";
-
-const response = await fetch(
-    `https://api.vesu.xyz/pools/${POOL_ID}?onlyEnabledAssets=true`
-);
-const data = await response.json();
-
-// Extract USDC borrow rate
-const usdc = data.data.assets.find(a => a.symbol === 'USDC');
-const borrowApr = Number(usdc.stats.borrowApr.value) / 1e18 * 100;
-
-// Extract wBTC/USDC pair info
-const pair = data.data.pairs.find(p => 
-    p.collateralAssetAddress.includes('wbtc') &&
-    p.debtAssetAddress.includes('usdc')
-);
-const maxLTV = Number(pair.maxLTV.value) / 1e18;
-```
-
-### AVNU API
-
-Get swap quotes:
-
-```typescript
-const quote = await fetch('https://starknet.api.avnu.fi/swap/v2/quotes', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-        sellTokenAddress: CONTRACTS.USDC,
-        buyTokenAddress: CONTRACTS.WBTC,
-        sellAmount: '1000000',  // $1 USDC
-        takerAddress: CONTRACTS.EXECUTOR,
-    })
-}).then(r => r.json());
-
-console.log('Expected BTC out:', quote.buyAmount);
-console.log('Price impact:', quote.priceImpact);
-```
-
-## Events
-
-### Deposit Event
+### Key Functions
 
 ```cairo
-struct DepositEvent {
-    sender: ContractAddress,
-    owner: ContractAddress,
-    assets: u256,
+// Deposit wBTC, receive vault shares
+fn deposit(
+    amount: u256,
+    avnu_calldata: Array<felt252>
+) -> u256
+
+// Withdraw shares, receive wBTC
+fn withdraw(
     shares: u256,
-}
-```
-
-### Withdraw Event
-
-```cairo
-struct WithdrawEvent {
-    sender: ContractAddress,
     receiver: ContractAddress,
     owner: ContractAddress,
-    assets: u256,
-    shares: u256,
-}
+    avnu_calldata: Array<felt252>
+) -> u256
+
+// Get user's share balance
+fn balance_of(owner: ContractAddress) -> u256
+
+// Get total USDC in vault
+fn total_assets() -> u256
 ```
 
-## Error Codes
+## Frontend Integration
 
-| Error | Meaning |
-|-------|---------|
-| `ZERO_AMOUNT` | Cannot deposit or withdraw zero |
-| `PAUSED` | Vault is paused |
-| `INSUFFICIENT_SHARES` | User doesn't have enough shares |
-| `SLIPPAGE` | Swap returned less than minimum |
-| `ONLY_VAULT` | Only vault can trigger executor |
-| `ONLY_VESU` | Only Vesu can call flash loan callback |
+### Connect to Vault
+
+```typescript
+import { useContract } from "@starknet-react/core";
+import { VAULT_ABI, CONTRACTS } from "@/lib/contracts";
+
+const { contract } = useContract({
+    abi: VAULT_ABI,
+    address: CONTRACTS.VAULT
+});
+
+// Get user shares
+const shares = await contract.call("balance_of", [userAddress]);
+```
+
+### Get AVNU Swap Calldata
+
+```typescript
+import { getSwapCalldata } from "@/lib/avnu";
+
+const calldata = await getSwapCalldata(
+    wbtcAmount,
+    wbtcAddress,
+    usdcAddress,
+    userAddress
+);
+```
+
+## Environment Variables
+
+Backend requires these in `.env`:
+
+```env
+# Extended Exchange
+EXTENDED_API_KEY=your_api_key
+EXTENDED_STARK_KEY=your_stark_private_key
+EXTENDED_VAULT_NUMBER=your_position_id
+
+# Operator Wallet
+OPERATOR_PRIVATE_KEY=your_starknet_private_key
+
+# Starknet RPC
+STARKNET_RPC_URL=https://starknet-mainnet.g.alchemy.com/v2/...
+
+# Vault Contract
+VAULT_CONTRACT_ADDRESS=0x066db06cfe7d18c11f6ed5bf93dfb0db7e4ff40d8f5a41e9f7e2d01ebb7e16b8
+```
+
+## Running Locally
+
+### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+cp .env.example .env
+# Fill in .env values
+PYTHONPATH=. uvicorn src.api:app --host 0.0.0.0 --port 8001 --reload
+```
+
+### Frontend
+
+```bash
+cd app
+npm install
+npm run dev
+```
 
 ## Testing
 
-### Local Development
+### Test Strategy Status
 
 ```bash
-# Clone repo
-git clone https://github.com/unboundlabs/unbound
-cd unbound
-
-# Build contracts
-cd contracts/v1
-scarb build
-
-# Run tests
-snforge test
+curl http://localhost:8001/api/strategy/status | jq
 ```
 
-### Forked Testing
+### Test Deposit Flow
 
-```bash
-# Fork mainnet for testing
-snforge test --fork-url https://starknet-mainnet.g.alchemy.com/...
-```
+1. Connect wallet on frontend
+2. Deposit wBTC
+3. Check backend logs for auto-deposit to Extended
+4. Verify position on Extended UI

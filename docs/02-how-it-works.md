@@ -1,42 +1,30 @@
 # How It Works
 
-This document explains the complete flow of interacting with Unbound, from deposit to withdrawal.
+This document explains the complete flow of Unbound, from deposit to withdrawal.
 
 ## Deposit Flow
 
 ### Step 1: User Initiates Deposit
 
-The user calls `deposit_and_leverage` with:
-- `assets`: Amount of wBTC to deposit
-- `flash_loan_amount`: Amount of USDC to flash loan
-- `min_collateral_out`: Minimum wBTC expected from swap (slippage protection)
-- `avnu_calldata`: Pre-computed swap calldata from AVNU API
-
-### Step 2: Flash Loan Request
+User connects wallet and deposits wBTC through the frontend:
 
 ```
-Vault → Vesu Pool: flash_loan(USDC, flash_loan_amount)
+User → Frontend: deposit wBTC
 ```
 
-Vesu transfers USDC to the Executor and calls `on_flash_loan` callback.
+### Step 2: Vault Swaps to USDC
 
-### Step 3: Executor Operations
+The vault smart contract:
+1. Receives user's wBTC
+2. Swaps wBTC → USDC via AVNU
+3. Mints vault shares (uBTC) to user
+4. Sends USDC to operator wallet
 
-Inside the flash loan callback, Executor performs:
+### Step 3: Automatic Deposit to Extended
 
-```
-1. Swap USDC → wBTC via AVNU
-2. Combine user's wBTC + swapped wBTC
-3. Deposit ALL wBTC to Vesu as collateral
-4. Borrow USDC from Vesu position
-5. Approve Vesu to take USDC (repays flash loan)
-```
-
-### Step 4: Share Minting
-
-After the flash loan completes, the Vault:
-1. Calculates shares based on deposited assets
-2. Mints vault shares (uBTC) to the user
+Backend detects USDC in operator wallet and:
+1. Deposits USDC to Extended exchange
+2. Executes strategy (opens SHORT if funding > 0)
 
 ### Deposit Flow Diagram
 
@@ -44,110 +32,108 @@ After the flash loan completes, the Vault:
 sequenceDiagram
     participant User
     participant Vault
-    participant Executor
-    participant Vesu
     participant AVNU
+    participant Operator
+    participant Extended
 
-    User->>Vault: deposit_and_leverage(wBTC, flashAmount)
-    User->>Vault: Transfer wBTC
-    Vault->>Vesu: flash_loan(USDC)
-    Vesu->>Executor: on_flash_loan(USDC)
-    Executor->>AVNU: swap(USDC → wBTC)
-    AVNU-->>Executor: wBTC
-    Executor->>Vesu: deposit wBTC (collateral)
-    Executor->>Vesu: borrow USDC
-    Executor->>Vesu: repay flash loan
+    User->>Vault: deposit(wBTC)
+    Vault->>AVNU: swap(wBTC → USDC)
+    AVNU-->>Vault: USDC
     Vault-->>User: mint shares (uBTC)
+    Vault->>Operator: transfer USDC
+    Operator->>Extended: deposit USDC
+    Operator->>Extended: open SHORT (if funding > 0)
+```
+
+## Strategy Execution
+
+The backend runs the strategy automatically:
+
+### When Funding is Positive
+```
+Backend: Open SHORT BTC-USD position
+Result: Receive hourly funding payments
+```
+
+### When Funding is Negative
+```
+Backend: Close SHORT position
+Result: Avoid paying funding
+```
+
+### Strategy Loop
+
+```
+Every hour:
+  1. Check current funding rate
+  2. If funding > threshold AND no position:
+     → Open SHORT (size = equity × leverage)
+  3. If funding < -threshold AND has position:
+     → Close position
+  4. If position exists:
+     → Receive funding payment
 ```
 
 ## Withdrawal Flow
 
-### Step 1: User Initiates Withdrawal
+### Step 1: User Requests Withdrawal
 
-The user calls `withdraw_all` to close their entire position.
+User clicks "Request Withdrawal" on the frontend.
 
-### Step 2: Share Burning
+### Step 2: Backend Prepares Funds
 
-Vault calculates the user's share of the position and burns their vault tokens.
+Backend:
+1. Closes any open positions on Extended
+2. Requests USDC withdrawal from Extended
+3. Extended sends USDC to operator wallet
 
-### Step 3: Flash Loan for Deleveraging
+### Step 3: USDC Forwarded to Vault
 
-```
-Vault → Vesu Pool: flash_loan(USDC, debt_amount)
-```
+Backend forwards USDC from operator wallet to vault contract.
 
-### Step 4: Executor Unwind
+### Step 4: User Completes Withdrawal
 
-Inside the callback:
-
-```
-1. Repay USDC debt on Vesu
-2. Withdraw ALL wBTC collateral
-3. Swap wBTC → USDC to repay flash loan
-4. Transfer remaining wBTC to user
-```
+User calls `withdraw()` on vault contract:
+1. Burns user's shares
+2. Swaps USDC → wBTC via AVNU
+3. Sends wBTC to user
 
 ### Withdrawal Flow Diagram
 
 ```mermaid
 sequenceDiagram
     participant User
+    participant Backend
+    participant Extended
     participant Vault
-    participant Executor
-    participant Vesu
     participant AVNU
 
-    User->>Vault: withdraw_all()
-    Vault->>Vault: burn shares
-    Vault->>Vesu: flash_loan(USDC)
-    Vesu->>Executor: on_flash_loan(USDC)
-    Executor->>Vesu: repay debt
-    Executor->>Vesu: withdraw collateral (wBTC)
-    Executor->>AVNU: swap(wBTC → USDC)
-    AVNU-->>Executor: USDC
-    Executor->>Vesu: repay flash loan
-    Vault-->>User: transfer remaining wBTC
+    User->>Backend: request withdrawal
+    Backend->>Extended: close positions
+    Backend->>Extended: withdraw USDC
+    Extended-->>Backend: USDC (operator wallet)
+    Backend->>Vault: forward USDC
+    User->>Vault: withdraw(shares)
+    Vault->>AVNU: swap(USDC → wBTC)
+    AVNU-->>Vault: wBTC
+    Vault-->>User: transfer wBTC
 ```
 
 ## Position State
 
-After a successful deposit, the vault has:
+At any time, the vault has:
 
 | Component | Location |
 |-----------|----------|
-| Collateral (wBTC) | Vesu Pool (as collateral in position) |
-| Debt (USDC) | Vesu Pool (borrowed amount) |
-| Shares (uBTC) | User's wallet |
+| User Shares | User's wallet (uBTC tokens) |
+| USDC Collateral | Extended exchange |
+| SHORT Position | Extended exchange (when active) |
+| Unrealized PnL | Extended account |
 
-The Vault itself holds no assets—everything is in Vesu.
+## Key Events
 
-## Key Functions
-
-### `deposit_and_leverage`
-
-```cairo
-fn deposit_and_leverage(
-    assets: u256,           // wBTC amount (8 decimals)
-    flash_loan_amount: u256, // USDC to borrow (6 decimals)
-    min_collateral_out: u256, // Slippage protection
-    avnu_calldata: Array<felt252> // Swap route data
-) -> u256 // Returns shares minted
-```
-
-### `withdraw_all`
-
-```cairo
-fn withdraw_all(
-    min_underlying_out: u256, // Minimum wBTC to receive
-    avnu_calldata: Array<felt252> // Swap route data
-) -> u256 // Returns wBTC withdrawn
-```
-
-### View Functions
-
-```cairo
-fn get_vault_position() -> (u256, u256)  // (collateral, debt)
-fn total_assets() -> u256                 // Total collateral
-fn convert_to_shares(assets: u256) -> u256
-fn convert_to_assets(shares: u256) -> u256
-```
+| Event | What Happens |
+|-------|--------------|
+| User Deposits | wBTC → USDC → Extended → Open SHORT |
+| Funding Payment | Every hour, receive funding if SHORT |
+| User Withdraws | Close SHORT → USDC → wBTC → User |
