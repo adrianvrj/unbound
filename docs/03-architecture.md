@@ -4,24 +4,36 @@ This document describes the technical architecture of Unbound.
 
 ## System Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         UNBOUND SYSTEM                          │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│   ┌──────────────┐      ┌──────────────┐      ┌──────────────┐ │
-│   │   Frontend   │      │   Backend    │      │    Vault     │ │
-│   │   (Next.js)  │─────▶│   (FastAPI)  │◀────▶│  (Cairo)     │ │
-│   └──────────────┘      └──────────────┘      └──────────────┘ │
-│         │                      │                      │         │
-│         │                      │                      │         │
-│         ▼                      ▼                      ▼         │
-│   ┌──────────────┐      ┌──────────────┐      ┌──────────────┐ │
-│   │   Starknet   │      │   Extended   │      │    AVNU      │ │
-│   │   Wallet     │      │   Exchange   │      │   Router     │ │
-│   └──────────────┘      └──────────────┘      └──────────────┘ │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Frontend["Frontend (Next.js)"]
+        UI[User Interface]
+    end
+    
+    subgraph Backend["Backend (FastAPI)"]
+        API[REST API]
+        Strategy[Strategy Engine]
+        Monitor[Wallet Monitor]
+    end
+    
+    subgraph Contracts["Smart Contracts"]
+        Vault[Vault Cairo]
+    end
+    
+    subgraph External["External Services"]
+        Wallet[Starknet Wallet]
+        Extended[Extended Exchange]
+        AVNU[AVNU Router]
+    end
+    
+    UI --> Wallet
+    UI --> API
+    API <--> Strategy
+    API <--> Monitor
+    Vault <--> AVNU
+    Monitor --> Extended
+    Strategy --> Extended
+    Wallet --> Vault
 ```
 
 ## Smart Contracts
