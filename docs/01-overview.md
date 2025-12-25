@@ -2,7 +2,7 @@
 
 ## What is Unbound?
 
-Unbound is a **BTC Funding Rate Arbitrage Vault** that generates yield by capturing funding rate payments on perpetual futures exchanges. Users deposit wBTC and earn passive income without directional exposure to BTC price.
+Unbound is a **Delta-Neutral BTC Yield Vault** that generates yield by capturing funding rate payments on perpetual futures exchanges. Users deposit wBTC and earn passive income without directional exposure to BTC price.
 
 ## The Opportunity
 
@@ -13,39 +13,65 @@ On perpetual futures exchanges, traders pay or receive **funding rates** every h
 | Bullish (more longs) | **Positive** | Longs pay Shorts |
 | Bearish (more shorts) | **Negative** | Shorts pay Longs |
 
-Historically, funding rates are positive ~70% of the time because traders are generally bullish on BTC.
+Historically, funding rates are positive ~84% of the time because traders are generally bullish on BTC.
 
-## The Strategy
+## The Delta-Neutral Strategy
 
-Unbound captures this yield through a simple strategy:
+Unbound captures this yield through a hedged strategy:
 
-1. **Hold USDC as collateral** on Extended exchange
-2. **Open SHORT position** when funding is positive (receive payments)
-3. **Close position** when funding turns negative (avoid paying)
-4. **Repeat** automatically
+1. **Keep 50% as wBTC** in the vault (LONG exposure)
+2. **Swap 50% to USDC** and deposit to Extended exchange
+3. **Open SHORT position** equal to total wBTC value (2x leverage on USDC)
+4. **Collect funding** when rate is positive (shorts receive payments)
+5. **Close position** when funding turns negative (avoid paying)
 
 ### Why It's Delta-Neutral
 
-The USDC collateral doesn't change with BTC price. Small unrealized PnL from the short position is offset by the funding payments received. Net result: **stable yield regardless of BTC direction**.
+```
+Portfolio Breakdown:
+├── 50% wBTC in vault    = +0.5 BTC exposure (LONG)
+├── 50% USDC in Extended = $0 BTC exposure
+└── SHORT position       = -1.0 BTC exposure
+                          ─────────────────
+                     Net = ~0 BTC exposure (NEUTRAL)
+```
+
+BTC price movements are hedged: if BTC goes up, the wBTC gains offset the short losses. If BTC goes down, the short gains offset the wBTC losses.
+
+## How Funding Payments Work
+
+Extended uses this formula:
+```
+Funding Payment = Position Size × Mark Price × Funding Rate
+```
+
+- **If funding > 0**: Your SHORT receives payment from longs
+- **If funding < 0**: Your SHORT pays to longs
+
+Example with $10 USDC at 2x leverage:
+- Position size: 0.00011 BTC
+- Funding rate: 0.0013%/hr
+- **Hourly payment: ~$0.0001**
+- **Annual payment: ~$1.10**
 
 ## How It Benefits Users
 
 | Benefit | Description |
 |---------|-------------|
-| **Passive Income** | ~20-60% APY depending on market conditions |
+| **Passive Income** | ~10-25% APY depending on market conditions |
 | **No Price Risk** | Delta-neutral means no exposure to BTC volatility |
 | **Automated** | Strategy runs 24/7 without user intervention |
 | **Tokenized** | Vault shares (uBTC) are ERC-20 tokens |
 
-## Example Returns
+## Example APY (30-day average)
 
-| Funding Rate | APY (with 2x leverage) |
-|--------------|------------------------|
-| 0.001% / hour | ~17% |
-| 0.005% / hour | ~87% |
-| 0.01% / hour | ~175% |
+| Leverage | APY |
+|----------|-----|
+| 1x | ~7% |
+| 2x | ~14% |
+| 5x | ~35% |
 
-*Funding rates vary based on market sentiment.*
+*Funding rates vary based on market sentiment. Current rate may be higher or lower.*
 
 ## What Unbound Does NOT Do
 

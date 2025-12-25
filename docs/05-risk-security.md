@@ -7,102 +7,91 @@ This document outlines the risks and security considerations of using Unbound.
 ### 1. Strategy Risk
 
 **Negative Funding Periods**
-- Risk: Funding rates can turn negative, meaning shorts pay longs
-- Mitigation: Strategy closes positions when funding < threshold
-- Impact: Reduced yield during negative funding periods
+- Risk: Funding rates can turn negative (~16% of time)
+- Mitigation: PositionManager closes positions when funding < -0.01%
+- Impact: Reduced yield during negative periods, but no losses from payments
 
-**Low Funding Periods**
-- Risk: Funding rates near zero generate minimal yield
-- Impact: Lower than expected returns
+**Delta Drift**
+- Risk: Imbalance between wBTC value and short position
+- Mitigation: Automatic rebalancing when delta > 5%
+- Impact: Brief periods of directional exposure
 
 ### 2. Exchange Risk
 
 **Extended Exchange Custody**
-- Risk: USDC is held on Extended exchange
-- Impact: If Extended is hacked/insolvent, funds could be lost
+- Risk: USDC collateral is held on Extended exchange
+- Impact: If Extended is hacked/insolvent, USDC portion at risk
 - Mitigation: Extended uses Starknet validity proofs
 
-**Exchange Downtime**
-- Risk: Extended API/exchange unavailable
-- Impact: Unable to execute strategy or withdraw
-- Mitigation: Backend retries and manual fallbacks
+**Note:** 50% of deposits remain as wBTC in the vault contract, reducing exchange exposure.
 
 ### 3. Smart Contract Risk
 
 **Vault Contract Bugs**
-- Risk: Bugs in vault contract could lock funds
-- Mitigation: Simple contract design, open source
+- Risk: Bugs could lock or lose funds
+- Mitigation: Simple ERC-4626 design, open source code
 
 **Swap Slippage**
-- Risk: Poor swap rates during wBTC ↔ USDC conversion
-- Mitigation: Slippage protection in contract + AVNU best routing
+- Risk: Poor rates during wBTC ↔ USDC swaps
+- Mitigation: Slippage protection + AVNU best routing
 
 ### 4. Operator Risk
 
 **Backend Downtime**
-- Risk: Backend service goes offline
-- Impact: Strategy stops executing, no new deposits processed
-- Mitigation: Funds remain safe in Extended, can be manually recovered
+- Risk: Backend services go offline
+- Impact: No new deposits processed, no rebalancing
+- Mitigation: Funds remain safe; manual recovery possible
 
 **Operator Key Compromise**
-- Risk: Operator private key stolen
-- Impact: Attacker could withdraw from Extended to operator wallet
-- Mitigation: Key stored securely, monitoring for unusual activity
+- Risk: Private key stolen
+- Impact: Attacker could withdraw from Extended
+- Mitigation: Secure key storage, monitoring
 
 ## Position Risks
 
-### Unrealized PnL
+### Price Movement (Hedged)
 
-Short positions have unrealized PnL:
-- If BTC price rises: Unrealized loss on short
-- If BTC price falls: Unrealized gain on short
+The delta-neutral design hedges price risk:
 
-**Example:**
-| BTC Price Move | Short PnL | Funding Received | Net |
-|----------------|-----------|------------------|-----|
-| +5% | -$500 | +$100 (week) | -$400 |
-| -5% | +$500 | +$100 (week) | +$600 |
+| BTC Move | wBTC in Vault | Short PnL | Net Position |
+|----------|---------------|-----------|--------------|
+| +10% | +$10 | -$10 | ~$0 |
+| -10% | -$10 | +$10 | ~$0 |
 
-The strategy is delta-neutral over time as funding payments offset price movements.
+**Result:** Price movements are offset by the hedge.
 
 ### Liquidation Risk
 
-With 2x leverage:
-- Liquidation at ~50% move against position
-- Example: If BTC rises 50%+ rapidly, position could be liquidated
-
-**Mitigation:**
-- Conservative leverage (2x default)
-- Positions closed when funding is unfavorable
+With 2x leverage on USDC portion:
+- Liquidation occurs if BTC rises ~50% without rebalancing
+- PositionManager monitors margin ratio
+- Conservative leverage minimizes this risk
 
 ## Security Measures
 
 | Measure | Implementation |
 |---------|----------------|
-| Key Security | Operator key stored in environment variables |
-| API Authentication | Extended API key with limited permissions |
-| Transaction Signing | Stark signatures via x10 SDK |
-| Access Control | Vault has Ownable pattern |
+| Key Security | Environment variables, not in code |
+| Queue System | On-chain deposit/withdrawal queues |
+| Access Control | Operator-only functions for processing |
+| Signature Verification | NAV updates require operator signature |
 
 ## Best Practices for Users
 
 1. **Start Small**: Test with small amounts first
-2. **Understand the Strategy**: Know that yield comes from funding rates
-3. **Monitor**: Check your position regularly
+2. **Understand Risks**: Funding can be negative, exchange has custody
+3. **Monitor**: Check position status regularly
 4. **Diversify**: Don't put all funds in one vault
 
 ## Emergency Procedures
 
 ### If Backend Goes Down
-- Funds remain in Extended
-- Owner can manually withdraw using operator wallet
-- Users can request admin assistance
-
-### If Extended Has Issues
-- Monitor Extended status
-- Funds can be withdrawn when service resumes
+1. Funds remain in Extended + vault
+2. Owner can manually recover using operator wallet
+3. wBTC in vault is always accessible
 
 ### Full Recovery
-1. Withdraw all funds from Extended manually
-2. Send USDC to vault contract
-3. Users withdraw their share via contract
+1. Close all positions on Extended
+2. Withdraw USDC to operator wallet
+3. Forward USDC to vault contract
+4. Users withdraw their proportional share

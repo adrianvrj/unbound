@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the technical architecture of Unbound.
+This document describes the technical architecture of Unbound's delta-neutral vault.
 
 ## System Overview
 
@@ -10,14 +10,16 @@ flowchart TB
         UI[User Interface]
     end
     
-    subgraph Backend["Backend (FastAPI)"]
-        API[REST API]
-        Strategy[Strategy Engine]
-        Monitor[Wallet Monitor]
+    subgraph Backend["Backend Services"]
+        API[FastAPI]
+        DP[DepositProcessor]
+        WP[WithdrawalProcessor]
+        PM[PositionManager]
+        NR[NAVReporter]
     end
     
-    subgraph Contracts["Smart Contracts"]
-        Vault[Vault Cairo]
+    subgraph Contracts["Smart Contracts (Cairo)"]
+        Vault[UnboundVault ERC-4626]
     end
     
     subgraph External["External Services"]
@@ -28,105 +30,130 @@ flowchart TB
     
     UI --> Wallet
     UI --> API
-    API <--> Strategy
-    API <--> Monitor
-    Vault <--> AVNU
-    Monitor --> Extended
-    Strategy --> Extended
     Wallet --> Vault
+    Vault <--> AVNU
+    DP --> Extended
+    WP --> Extended
+    PM --> Extended
+    API <--> DP
+    API <--> WP
+    API <--> PM
 ```
 
 ## Smart Contracts
 
 ### Vault Contract (`vault.cairo`)
 
-The vault is an ERC-4626 tokenized vault that:
-- Accepts wBTC deposits
-- Swaps to USDC via AVNU
-- Mints shares proportional to deposit
-- Handles withdrawals with USDC → wBTC swap
+ERC-4626 tokenized vault with queue system:
+
+**Storage:**
+```cairo
+// Assets
+underlying_asset: wBTC
+collateral_asset: USDC
+total_wbtc_held: u256  // wBTC kept for LONG exposure
+
+// Queue system
+deposit_queue_head/tail: u256
+withdrawal_queue_head/tail: u256
+pending_deposits: Map<u256, DepositRequest>
+pending_withdrawals: Map<u256, WithdrawalRequest>
+```
 
 **Key Functions:**
 ```cairo
-fn deposit(amount: u256, avnu_calldata: Array<felt252>) -> u256
-fn withdraw(shares: u256, receiver: ContractAddress, owner: ContractAddress, avnu_calldata: Array<felt252>) -> u256
-fn total_assets() -> u256
-fn balance_of(owner: ContractAddress) -> u256
+fn deposit(wbtc_amount, min_shares, avnu_calldata) -> request_id
+fn request_withdraw(shares, min_assets) -> request_id
+fn complete_withdrawal(request_id, avnu_calldata)
+fn process_deposits(count)  // Operator only
+fn mark_withdrawal_ready(request_id, usdc_amount)  // Operator only
 ```
 
-## Backend System
+## Backend Services
 
-### FastAPI Server (`api.py`)
+### DepositProcessor (`deposit_processor.py`)
 
-REST API for vault operations:
+Polls vault for pending deposits every 30 seconds:
+1. Reads deposit queue from contract
+2. For each unprocessed deposit:
+   - Calls `process_deposits()` (mints shares, transfers USDC)
+   - Deposits USDC to Extended
+   - Opens SHORT position
+
+### WithdrawalProcessor (`withdrawal_processor.py`)
+
+Polls vault for pending withdrawals every 30 seconds:
+1. Detects PENDING withdrawals
+2. Calculates USDC value of shares
+3. Closes proportional position on Extended
+4. Requests USDC withdrawal from Extended
+5. Calls `mark_withdrawal_ready()` when USDC arrives
+
+### PositionManager (`position_manager.py`)
+
+Monitors position health every 60 seconds:
+- Checks funding rate
+- Closes positions if funding < -0.01%
+- Reopens when funding recovers
+- Monitors margin ratio for liquidation risk
+
+### NAVReporter (`nav_reporter.py`)
+
+Reports NAV to vault periodically:
+- Calculates: wBTC value + Extended equity
+- Signs NAV update
+- Submits to vault contract
+
+## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/vault/status` | GET | Vault stats and APY |
-| `/api/strategy/status` | GET | Strategy state |
-| `/api/strategy/execute` | POST | Run strategy iteration |
-| `/api/withdrawal/request` | POST | Request withdrawal |
-| `/api/wallet/status` | GET | Operator wallet balance |
-
-### Strategy Engine (`strategy.py`)
-
-Implements funding rate arbitrage:
-- Monitors funding rate from Extended API
-- Opens SHORT when funding > threshold
-- Closes position when funding < threshold
-- Auto-executes after deposits
-
-### Starknet Client (`starknet_client.py`)
-
-Handles on-chain operations:
-- Monitors operator wallet for USDC
-- Deposits USDC to Extended
-- Forwards USDC to vault for withdrawals
-
-### Extended Client (`extended_client.py`)
-
-Interacts with Extended exchange:
-- Gets market data and funding rates
-- Places orders using x10 SDK
-- Manages positions and withdrawals
+| `/api/status` | GET | Vault status, NAV, delta |
+| `/api/apy` | GET | Funding rate and APY estimates |
+| `/api/position` | GET | Current short position details |
+| `/api/queues/status` | GET | Deposit/withdrawal queue status |
+| `/api/funding-history` | GET | Historical funding payments |
 
 ## External Integrations
 
 ### Extended Exchange
 
-Perpetual futures exchange on Starknet:
-- Deposit contract: `0x062da0780fae50d68cecaa5a051606dc21217ba290969b302db4dd99d2e9b470`
-- Trading via REST API + Stark signatures
+Perpetual futures on Starknet:
+- Deposit contract: `0x062da0780fae...`
 - Funding payments every hour
+- Formula: `Position × Price × Rate`
 
 ### AVNU Router
 
-DEX aggregator for best swap rates:
-- Address: `0x04270219d365d6b017231b52e92b3fb5d7c8378b05e9abc97724537a80e93b0f`
-- Used for wBTC ↔ USDC swaps
+DEX aggregator for swaps:
+- Address: `0x04270219d365d6...`
+- Used for wBTC ↔ USDC swaps on deposit/withdrawal
 
 ## Data Flow
 
 ### Deposit
 ```
-User wBTC → Vault → AVNU → USDC → Operator → Extended → SHORT position
+User wBTC → Vault (keep 50%) → AVNU (swap 50%) → 
+Backend → Extended deposit → Open SHORT
 ```
 
 ### Yield Generation
 ```
-Extended → Funding payments every hour → Equity grows
+Every hour: Extended calculates funding
+If rate > 0: Shorts receive payment → Equity grows
 ```
 
 ### Withdrawal
 ```
-Extended → USDC → Operator → Vault → AVNU → wBTC → User
+Close SHORT → Withdraw USDC from Extended →
+Vault swaps to wBTC → Combine with vault wBTC → User
 ```
 
 ## Security Model
 
-| Component | Trust Assumption |
-|-----------|------------------|
-| Vault Contract | Trustless (on-chain) |
-| Backend | Trust operator to run strategy honestly |
-| Extended | Trust exchange custody |
-| Operator Wallet | Controlled by backend |
+| Component | Trust Model |
+|-----------|-------------|
+| Vault Contract | Trustless (on-chain, verified) |
+| Operator Backend | Trust to run strategy, cannot steal funds |
+| Extended Exchange | Custody risk for USDC collateral |
+| AVNU Swaps | Trustless (atomic, slippage protected) |

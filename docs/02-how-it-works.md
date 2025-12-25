@@ -1,30 +1,28 @@
 # How It Works
 
-This document explains the complete flow of Unbound, from deposit to withdrawal.
+This document explains the complete flow of Unbound's delta-neutral vault.
 
 ## Deposit Flow
 
 ### Step 1: User Initiates Deposit
 
-User connects wallet and deposits wBTC through the frontend:
+User connects wallet and deposits wBTC through the frontend.
 
-```
-User → Frontend: deposit wBTC
-```
-
-### Step 2: Vault Swaps to USDC
+### Step 2: Vault Processes Deposit
 
 The vault smart contract:
 1. Receives user's wBTC
-2. Swaps wBTC → USDC via AVNU
-3. Mints vault shares (uBTC) to user
-4. Sends USDC to operator wallet
+2. Keeps 50% as wBTC in vault (LONG exposure)
+3. Swaps other 50% to USDC via AVNU
+4. Queues deposit for backend processing
+5. Mints vault shares to user
 
-### Step 3: Automatic Deposit to Extended
+### Step 3: Backend Opens Position
 
-Backend detects USDC in operator wallet and:
-1. Deposits USDC to Extended exchange
-2. Executes strategy (opens SHORT if funding > 0)
+Backend `DepositProcessor` detects queued deposit:
+1. Calls `process_deposits()` on vault (mints shares, transfers USDC)
+2. Deposits USDC to Extended exchange
+3. Opens SHORT position (2x leverage on USDC = 1x on total deposit)
 
 ### Deposit Flow Diagram
 
@@ -33,107 +31,117 @@ sequenceDiagram
     participant User
     participant Vault
     participant AVNU
-    participant Operator
+    participant Backend
     participant Extended
 
     User->>Vault: deposit(wBTC)
-    Vault->>AVNU: swap(wBTC → USDC)
-    AVNU-->>Vault: USDC
-    Vault-->>User: mint shares (uBTC)
-    Vault->>Operator: transfer USDC
-    Operator->>Extended: deposit USDC
-    Operator->>Extended: open SHORT (if funding > 0)
+    Vault->>Vault: keep 50% wBTC
+    Vault->>AVNU: swap 50% (wBTC → USDC)
+    Vault-->>User: mint shares
+    Vault->>Backend: queue deposit
+    Backend->>Vault: process_deposits()
+    Backend->>Extended: deposit USDC
+    Backend->>Extended: open SHORT (2x leverage)
 ```
 
-## Strategy Execution
+## Delta-Neutral Position
 
-The backend runs the strategy automatically:
+After deposit, the vault holds:
 
-### When Funding is Positive
-```
-Backend: Open SHORT BTC-USD position
-Result: Receive hourly funding payments
-```
+| Component | Location | BTC Exposure |
+|-----------|----------|--------------|
+| 50% wBTC | Vault contract | +0.5 BTC (LONG) |
+| 50% USDC | Extended exchange | 0 |
+| SHORT position | Extended (2x leverage) | -1.0 BTC |
+| **Net exposure** | | **~0 (NEUTRAL)** |
 
-### When Funding is Negative
-```
-Backend: Close SHORT position
-Result: Avoid paying funding
-```
+## Funding Payments
 
-### Strategy Loop
+Extended charges/pays funding every hour using this formula:
 
 ```
-Every hour:
-  1. Check current funding rate
-  2. If funding > threshold AND no position:
-     → Open SHORT (size = equity × leverage)
-  3. If funding < -threshold AND has position:
-     → Close position
-  4. If position exists:
-     → Receive funding payment
+Funding Payment = Position Size × Mark Price × Funding Rate
 ```
+
+### When Funding is Positive (84% of time)
+```
+Longs pay → Shorts receive
+Result: Your equity in Extended grows
+```
+
+### When Funding is Negative (16% of time)
+```
+Shorts pay → Longs receive
+Result: Your equity in Extended shrinks
+```
+
+### Position Manager
+
+Backend `PositionManager` monitors funding rate every 60 seconds:
+- If funding < -0.01%: Closes all shorts to avoid paying
+- If funding recovers: Allows reopening positions
+
+## NAV Calculation
+
+**NAV = wBTC Value + Extended Equity**
+
+```
+Example:
+├── wBTC held: 0.00005 BTC × $88,000 = $4.40
+├── Extended equity: $5.28
+└── Total NAV: $9.68
+```
+
+Share value = NAV / Total Shares
 
 ## Withdrawal Flow
 
 ### Step 1: User Requests Withdrawal
 
-User clicks "Request Withdrawal" on the frontend.
+User calls `request_withdraw(shares)` on vault:
+- Shares are locked
+- Withdrawal queued with status PENDING
 
-### Step 2: Backend Prepares Funds
+### Step 2: Backend Processes Withdrawal
 
-Backend:
-1. Closes any open positions on Extended
-2. Requests USDC withdrawal from Extended
-3. Extended sends USDC to operator wallet
+Backend `WithdrawalProcessor` detects pending withdrawal:
+1. Calculates USDC value of shares
+2. Closes proportional short position
+3. Withdraws USDC from Extended
+4. Calls `mark_withdrawal_ready()` on vault
 
-### Step 3: USDC Forwarded to Vault
+### Step 3: User Completes Withdrawal
 
-Backend forwards USDC from operator wallet to vault contract.
-
-### Step 4: User Completes Withdrawal
-
-User calls `withdraw()` on vault contract:
-1. Burns user's shares
-2. Swaps USDC → wBTC via AVNU
-3. Sends wBTC to user
+User calls `complete_withdrawal()`:
+1. Vault swaps USDC → wBTC via AVNU
+2. Distributes proportional wBTC from vault holdings
+3. Burns shares
+4. Sends total wBTC to user
 
 ### Withdrawal Flow Diagram
 
 ```mermaid
 sequenceDiagram
     participant User
+    participant Vault
     participant Backend
     participant Extended
-    participant Vault
     participant AVNU
 
-    User->>Backend: request withdrawal
-    Backend->>Extended: close positions
+    User->>Vault: request_withdraw(shares)
+    Vault-->>User: shares locked
+    Backend->>Extended: close proportional position
     Backend->>Extended: withdraw USDC
-    Extended-->>Backend: USDC (operator wallet)
-    Backend->>Vault: forward USDC
-    User->>Vault: withdraw(shares)
+    Backend->>Vault: mark_withdrawal_ready()
+    User->>Vault: complete_withdrawal()
     Vault->>AVNU: swap(USDC → wBTC)
-    AVNU-->>Vault: wBTC
     Vault-->>User: transfer wBTC
 ```
-
-## Position State
-
-At any time, the vault has:
-
-| Component | Location |
-|-----------|----------|
-| User Shares | User's wallet (uBTC tokens) |
-| USDC Collateral | Extended exchange |
-| SHORT Position | Extended exchange (when active) |
-| Unrealized PnL | Extended account |
 
 ## Key Events
 
 | Event | What Happens |
-|-------|--------------|
-| User Deposits | wBTC → USDC → Extended → Open SHORT |
-| Funding Payment | Every hour, receive funding if SHORT |
-| User Withdraws | Close SHORT → USDC → wBTC → User |
+|-------|--------------| 
+| User Deposits | 50% kept as wBTC, 50% → USDC → Extended → SHORT |
+| Funding Payment | Every hour, equity grows/shrinks based on funding rate |
+| User Withdraws | Close proportional SHORT → USDC + wBTC → User |

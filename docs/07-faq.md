@@ -6,70 +6,87 @@ Frequently asked questions about Unbound.
 
 ### What is Unbound?
 
-Unbound is a **BTC Funding Rate Arbitrage Vault** that earns yield by capturing funding payments on perpetual futures. Users deposit wBTC and earn passive income without directional exposure to BTC price.
+Unbound is a **Delta-Neutral BTC Yield Vault** that earns yield by capturing funding payments on perpetual futures. Users deposit wBTC and earn passive income without directional exposure to BTC price.
 
 ### How does it generate yield?
 
-On perpetual futures exchanges, traders pay **funding rates** every hour. When funding is positive (which happens ~70% of the time), long traders pay short traders. Unbound opens short positions to receive these payments.
+On perpetual futures exchanges, traders pay **funding rates** every hour. When funding is positive (~84% of the time), long traders pay short traders. Unbound opens short positions to receive these payments.
 
 ### Is this delta-neutral?
 
-Yes. The vault holds USDC as collateral and opens SHORT positions. Since USDC doesn't change with BTC price, and the short position's PnL is offset by funding payments over time, the strategy is market-neutral.
+Yes. The vault uses a 50/50 strategy:
+- **50% kept as wBTC** in the vault (LONG exposure)
+- **50% converted to USDC** → deposited to Extended → opens SHORT
+
+The short position (2x on USDC = 1x on total) offsets the wBTC holdings, creating a market-neutral position.
 
 ### What's the expected APY?
 
-APY varies based on market sentiment:
-- Bull markets (high funding): 40-100%+ APY
-- Neutral markets: 15-30% APY
-- Bear markets (low/negative funding): 0-10% APY
+Based on 30-day historical data:
 
-Historical average is approximately 20-60% APY.
+| Leverage | APY |
+|----------|-----|
+| 1x | ~7% |
+| 2x | ~14% |
+| 5x | ~35% |
+
+*APY varies with market conditions. Current rate shown in app may be higher/lower.*
 
 ## Deposits & Withdrawals
 
 ### What token do I deposit?
 
-You deposit **wBTC** (wrapped Bitcoin on Starknet). The vault automatically converts it to USDC for the strategy.
+You deposit **wBTC** (wrapped Bitcoin on Starknet).
+
+### What happens to my deposit?
+
+1. 50% is kept as wBTC in the vault
+2. 50% is swapped to USDC and deposited to Extended
+3. A SHORT position is opened to hedge the wBTC
 
 ### How long do deposits take?
 
-Deposits are processed within minutes:
-1. Vault receives your wBTC (~instant)
+Processing takes ~2-5 minutes:
+1. Vault receives wBTC (~instant)
 2. Swap to USDC (~30 seconds)
-3. Deposit to Extended (~1-2 minutes)
-4. Strategy executes (~immediate)
+3. Backend deposits to Extended (~1-2 minutes)
+4. SHORT position opens (~30 seconds)
 
 ### How long do withdrawals take?
 
 Withdrawals can take 5-15 minutes:
-1. Request withdrawal through frontend
-2. Backend closes any open positions
-3. Extended processes withdrawal request
-4. USDC is forwarded to vault
-5. Vault swaps to wBTC and sends to you
+1. Request withdrawal (instant)
+2. Backend closes proportional position
+3. USDC withdrawn from Extended
+4. Vault swaps USDC → wBTC
+5. You receive wBTC
 
-### What token do I receive when withdrawing?
+### What token do I receive?
 
-You receive **wBTC**, the same token you deposited.
+You receive **wBTC**, same as you deposited.
+
+### Is there a minimum deposit?
+
+Yes, **0.0001 wBTC** (~$8.70 USD) to ensure the SHORT position meets Extended's minimum size.
 
 ## Strategy Questions
 
 ### What exchange does Unbound use?
 
-Unbound uses **Extended Exchange**, a perpetual futures platform on Starknet that uses validity proofs for security.
+**Extended Exchange** - a perpetual futures platform on Starknet with validity proofs.
 
-### What leverage does the strategy use?
+### What leverage is used?
 
-The default is **2x leverage**, which is conservative. This means liquidation would only occur if BTC rises 50%+ while in a short position.
+**2x leverage** on the USDC portion. Since only 50% goes to Extended, effective leverage on total deposit is 1x.
 
 ### Can I lose money?
 
-Yes, there are scenarios where returns could be negative:
+Yes, scenarios where returns could be negative:
 - Extended periods of negative funding
 - Exchange issues or hacks
-- Extreme market movements causing liquidation
+- Extreme price moves before rebalancing
 
-See the [Risk & Security](./05-risk-security.md) page for details.
+See [Risk & Security](./05-risk-security.md) for details.
 
 ### What are the fees?
 
@@ -81,34 +98,41 @@ See the [Risk & Security](./05-risk-security.md) page for details.
 
 ### Are my funds custodied?
 
-No. Your vault shares are yours on-chain. However, the USDC collateral is held on Extended exchange for trading. There is custody risk with the exchange.
+Partially:
+- **wBTC in vault**: On-chain, under contract control
+- **USDC on Extended**: Exchange custody (risk)
 
-### Can I see my position on Extended?
+### How does funding work?
 
-If you connect the operator wallet to Extended's UI, you can see the collective position. Individual user positions are tracked via vault shares.
+Extended calculates funding every hour:
+```
+Funding Payment = Position Size × Mark Price × Funding Rate
+```
+
+If rate is positive, your SHORT receives payment.
+
+### What if funding goes negative?
+
+The `PositionManager` monitors funding rate. If it drops below -0.01%, it closes positions to avoid paying. Positions reopen when funding recovers.
 
 ### Is the code open source?
 
-Yes. All smart contracts and backend code are open source on GitHub.
-
-### What happens if the backend goes down?
-
-Your funds remain safe in Extended. The strategy simply stops executing. The team can manually recover funds if needed.
+Yes. All contracts and backend code on GitHub.
 
 ## Troubleshooting
 
 ### My deposit is stuck
 
-1. Check Voyager for transaction status
-2. Verify backend is running
-3. Contact support if issue persists
+1. Check transaction on Voyager
+2. Deposits are processed every 30 seconds
+3. Contact support if >10 minutes
 
 ### I can't withdraw
 
-1. Ensure you have shares (check "Your Position" page)
-2. Wait for backend to process if recently requested
-3. Try again after a few minutes
+1. Ensure you have shares (check "Your Position")
+2. Withdrawals process every 30 seconds
+3. Wait for "Ready" status, then click "Complete"
 
 ### The APY seems wrong
 
-APY is estimated based on current funding rate and is variable. Check the strategy status for current funding rate.
+APY shown is based on current funding rate. The 30-day average is shown in the tooltip. Actual returns depend on funding during your holding period.
