@@ -48,11 +48,14 @@ Funding Payment = Position Size × Mark Price × Funding Rate
 - **If funding > 0**: Your SHORT receives payment from longs
 - **If funding < 0**: Your SHORT pays to longs
 
-Example with $10 USDC at 2x leverage:
-- Position size: 0.00011 BTC
+Example with $5,000 deposit:
+- wBTC kept in vault: $2,500 (LONG)
+- USDC to Extended: $2,500 → opens $5,000 SHORT (2x)
+- Position size: ~0.057 BTC (at $88,000)
 - Funding rate: 0.0013%/hr
-- **Hourly payment: ~$0.0001**
-- **Annual payment: ~$1.10**
+- **Hourly payment: ~$0.65**
+- **Daily payment: ~$15.60**
+- **Annual payment: ~$5,700** (~14% APY)
 
 ## How It Benefits Users
 

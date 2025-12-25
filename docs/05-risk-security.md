@@ -55,8 +55,10 @@ The delta-neutral design hedges price risk:
 
 | BTC Move | wBTC in Vault | Short PnL | Net Position |
 |----------|---------------|-----------|--------------|
-| +10% | +$10 | -$10 | ~$0 |
-| -10% | -$10 | +$10 | ~$0 |
+| +10% | +$250 | -$250 | ~$0 |
+| -10% | -$250 | +$250 | ~$0 |
+
+*Example based on $5,000 deposit ($2,500 wBTC + $2,500 USDC)*
 
 **Result:** Price movements are offset by the hedge.
 

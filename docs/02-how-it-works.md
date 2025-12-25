@@ -86,10 +86,10 @@ Backend `PositionManager` monitors funding rate every 60 seconds:
 **NAV = wBTC Value + Extended Equity**
 
 ```
-Example:
-├── wBTC held: 0.00005 BTC × $88,000 = $4.40
-├── Extended equity: $5.28
-└── Total NAV: $9.68
+Example with $5,000 deposit:
+├── wBTC held: 0.0284 BTC × $88,000 = $2,500
+├── Extended equity: $2,600 (including funding earned)
+└── Total NAV: $5,100
 ```
 
 Share value = NAV / Total Shares
