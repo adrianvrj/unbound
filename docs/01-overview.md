@@ -53,9 +53,9 @@ Example with $5,000 deposit:
 - USDC to Extended: $2,500 → opens $5,000 SHORT (2x)
 - Position size: ~0.057 BTC (at $88,000)
 - Funding rate: 0.0013%/hr
-- **Hourly payment: ~$0.65**
-- **Daily payment: ~$15.60**
-- **Annual payment: ~$5,700** (~14% APY)
+- **Hourly payment: ~$0.065**
+- **Daily payment: ~$1.56**
+- **Annual payment: ~$570** (~11% APY on total deposit)
 
 ## How It Benefits Users
 
