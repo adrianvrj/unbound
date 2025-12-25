@@ -1,2 +1,2 @@
-pub mod avnu;
-pub mod vesu;
+pub mod erc20;
+pub mod vault;

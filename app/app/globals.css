@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/* Custom Fonts */
+@font-face {
+  font-family: 'Fuuldtest';
+  src: url('/fonts/fuuldtest-regular.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+/* CSS Variables */
+:root {
+  --bg-primary: #171717;
+  --bg-secondary: #1f1f1f;
+  --bg-card: #252525;
+  --color-highlight: #BBFA48;
+  --color-muted: #666666;
+  --color-text: #ffffff;
+  --color-border: #333333;
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background-color: var(--bg-primary);
+  color: var(--color-text);
+  font-family: var(--font-geist), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* Font Classes */
+.font-data {
+  font-family: 'Fuuldtest', monospace;
+}
+
+.font-ui {
+  font-family: var(--font-geist), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Text Colors */
+.text-highlight {
+  color: var(--color-highlight);
+}
+
+.text-muted {
+  color: var(--color-muted);
+}
+
+/* Button Styles */
+.btn-primary {
+  background-color: var(--color-highlight);
+  color: #171717;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-primary:hover {
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-secondary);
+}
+
+/* Card Styles */
+.card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+/* Table Styles */
+.table-header {
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.75rem;
+}
+
+.table-row {
+  border-bottom: 1px solid var(--color-border);
+  padding: 1rem 0;
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+button {
+  cursor: pointer;
+}
