@@ -21,7 +21,7 @@ Unbound captures this yield through a hedged strategy:
 
 1. **Keep 50% as wBTC** in the vault (LONG exposure)
 2. **Swap 50% to USDC** and deposit to Extended exchange
-3. **Open SHORT position** equal to total wBTC value (2x leverage on USDC)
+3. **Open SHORT position** equal to wBTC value held (matches the hedge)
 4. **Collect funding** when rate is positive (shorts receive payments)
 5. **Close position** when funding turns negative (avoid paying)
 
@@ -30,10 +30,10 @@ Unbound captures this yield through a hedged strategy:
 ```
 Portfolio Breakdown:
 ├── 50% wBTC in vault    = +0.5 BTC exposure (LONG)
-├── 50% USDC in Extended = $0 BTC exposure
-└── SHORT position       = -1.0 BTC exposure
+├── 50% USDC in Extended = $0 BTC exposure (margin for short)
+└── SHORT position       = -0.5 BTC exposure
                           ─────────────────
-                     Net = ~0 BTC exposure (NEUTRAL)
+                     Net = 0 BTC exposure (NEUTRAL)
 ```
 
 BTC price movements are hedged: if BTC goes up, the wBTC gains offset the short losses. If BTC goes down, the short gains offset the wBTC losses.
@@ -50,29 +50,29 @@ Funding Payment = Position Size × Mark Price × Funding Rate
 
 Example with $5,000 deposit:
 - wBTC kept in vault: $2,500 (LONG)
-- USDC to Extended: $2,500 → opens $5,000 SHORT (2x)
-- Position size: ~0.057 BTC (at $88,000)
+- USDC to Extended: $2,500 → opens $2,500 SHORT (matches wBTC value)
+- Position size: ~0.0284 BTC (at $88,000)
 - Funding rate: 0.0013%/hr
-- **Hourly payment: ~$0.065**
-- **Daily payment: ~$1.56**
-- **Annual payment: ~$570** (~11% APY on total deposit)
+- **Hourly payment: ~$0.032**
+- **Daily payment: ~$0.78**
+- **Annual payment: ~$285** (~5-6% APY on total deposit)
 
 ## How It Benefits Users
 
 | Benefit | Description |
 |---------|-------------|
-| **Passive Income** | ~10-25% APY depending on market conditions |
+| **Passive Income** | ~5-12% APY depending on market conditions |
 | **No Price Risk** | Delta-neutral means no exposure to BTC volatility |
 | **Automated** | Strategy runs 24/7 without user intervention |
 | **Tokenized** | Vault shares (uBTC) are ERC-20 tokens |
 
-## Example APY (30-day average)
+## Typical APY Range
 
-| Leverage | APY |
-|----------|-----|
-| 1x | ~7% |
-| 2x | ~14% |
-| 5x | ~35% |
+| Market Condition | Funding Rate | APY on Total Deposit |
+|------------------|--------------|----------------------|
+| Low demand | 0.001%/hr | ~4% |
+| Normal | 0.0015%/hr | ~6% |
+| High demand | 0.003%/hr | ~12% |
 
 *Funding rates vary based on market sentiment. Current rate may be higher or lower.*
 

@@ -22,7 +22,7 @@ The vault smart contract:
 Backend `DepositProcessor` detects queued deposit:
 1. Calls `process_deposits()` on vault (mints shares, transfers USDC)
 2. Deposits USDC to Extended exchange
-3. Opens SHORT position (2x leverage on USDC = 1x on total deposit)
+3. Opens SHORT position matching wBTC value (delta-neutral)
 
 ### Deposit Flow Diagram
 
@@ -41,7 +41,7 @@ sequenceDiagram
     Vault->>Backend: queue deposit
     Backend->>Vault: process_deposits()
     Backend->>Extended: deposit USDC
-    Backend->>Extended: open SHORT (2x leverage)
+    Backend->>Extended: open SHORT (= wBTC value)
 ```
 
 ## Delta-Neutral Position
@@ -51,9 +51,9 @@ After deposit, the vault holds:
 | Component | Location | BTC Exposure |
 |-----------|----------|--------------|
 | 50% wBTC | Vault contract | +0.5 BTC (LONG) |
-| 50% USDC | Extended exchange | 0 |
-| SHORT position | Extended (2x leverage) | -1.0 BTC |
-| **Net exposure** | | **~0 (NEUTRAL)** |
+| 50% USDC | Extended exchange | 0 (margin) |
+| SHORT position | Extended | -0.5 BTC |
+| **Net exposure** | | **0 (NEUTRAL)** |
 
 ## Funding Payments
 

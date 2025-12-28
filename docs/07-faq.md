@@ -18,19 +18,19 @@ Yes. The vault uses a 50/50 strategy:
 - **50% kept as wBTC** in the vault (LONG exposure)
 - **50% converted to USDC** → deposited to Extended → opens SHORT
 
-The short position (2x on USDC = 1x on total) offsets the wBTC holdings, creating a market-neutral position.
+The short position matches the wBTC value, creating a market-neutral position with net 0 BTC exposure.
 
 ### What's the expected APY?
 
-Based on 30-day historical data:
+APY depends on current funding rates:
 
-| Leverage | APY |
-|----------|-----|
-| 1x | ~7% |
-| 2x | ~14% |
-| 5x | ~35% |
+| Market Condition | Funding Rate | APY |
+|------------------|--------------|-----|
+| Low demand | 0.001%/hr | ~4% |
+| Normal | 0.0015%/hr | ~6% |
+| High demand | 0.003%/hr | ~12% |
 
-*APY varies with market conditions. Current rate shown in app may be higher/lower.*
+*APY varies with market conditions. Only 50% of your deposit generates yield (the short position).*
 
 ## Deposits & Withdrawals
 
@@ -67,7 +67,7 @@ You receive **wBTC**, same as you deposited.
 
 ### Is there a minimum deposit?
 
-Yes, **0.0001 wBTC** (~$8.70 USD) to ensure the SHORT position meets Extended's minimum size.
+Yes, **0.00025 wBTC** (~$25 USD) to ensure the SHORT position meets Extended's minimum trade size.
 
 ## Strategy Questions
 
@@ -77,7 +77,13 @@ Yes, **0.0001 wBTC** (~$8.70 USD) to ensure the SHORT position meets Extended's 
 
 ### What leverage is used?
 
-**2x leverage** on the USDC portion. Since only 50% goes to Extended, effective leverage on total deposit is 1x.
+The account uses **2x leverage** which affects margin requirements but **not APY**. 
+
+- Short position size = wBTC value (50% of deposit)
+- Leverage allows using ~50% of margin for the position
+- The remaining margin acts as a safety buffer against liquidation
+
+**Important**: Higher leverage does not increase yield. Only the position size determines funding payments.
 
 ### Can I lose money?
 
